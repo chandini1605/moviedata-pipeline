@@ -1,22 +1,20 @@
-import mysql.connector
+
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+
 import pandas as pd
-from src.extract import extract_data
+import mysql.connector
+from dotenv import load_dotenv
 
 
 # Get project directory
 project_dir = Path(__file__).resolve().parent.parent
 
-# Load database credentials from .env
+# Load database credentials
 load_dotenv(project_dir / ".env")
 
 
-# --------------------------------------------------
-# 1. CREATE MYSQL CONNECTION
-# --------------------------------------------------
-
+# Create MySQL connection
 def create_connection():
 
     try:
@@ -36,33 +34,33 @@ def create_connection():
         return None
 
 
-# --------------------------------------------------
-# 2. LOAD MOVIES TABLE
-# --------------------------------------------------
+# Convert missing values into None for MySQL
+def clean_value(value):
 
-def load_movies():
+    if pd.isna(value):
+        return None
 
-    # Extract MovieLens data
-    movies, ratings = extract_data()
+    if hasattr(value, "item"):
+        return value.item()
 
-    # Read OMDb enriched data
-    enriched_path = project_dir / "data" / "omdb_enriched.csv"
-    enriched_movies = pd.read_csv(enriched_path)
+    return value
 
-    # Merge MovieLens and OMDb data
+
+# Load all four MySQL tables
+def load_data(movies, ratings, enriched_movies):
+
+    # Remove duplicate release_year column from OMDb data
+    enriched_movies = enriched_movies.drop(
+        columns=["release_year"],
+        errors="ignore"
+    )
+
+    # Merge transformed MovieLens data with OMDb data
     movies = movies.merge(
         enriched_movies,
         on="movieId",
         how="left"
     )
-
-    # Extract release year from MovieLens title
-    movie_year = movies["title"].str.extract(r"\((\d{4})\)")[0]
-
-    movies["release_year"] = pd.to_numeric(
-        movie_year,
-        errors="coerce"
-    ).fillna(movies["release_year"])
 
     # Convert OMDb release date
     movies["Released"] = pd.to_datetime(
@@ -84,288 +82,193 @@ def load_movies():
 
     cursor = connection.cursor()
 
-    query = """
-        INSERT IGNORE INTO movies (
-            movie_id, title, release_year, omdb_found,
-            director, actors, plot, released, runtime,
-            omdb_genre, language, country, box_office,
-            imdb_rating, awards
-        )
-        VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s
-        )
-    """
-
-    records = []
-
-    for _, row in movies.iterrows():
-
-        found = row["OMDbFound"]
-
-        if pd.isna(found):
-            found = None
-        else:
-            found = str(found).strip().lower() in ("true", "1", "yes")
-
-        record = (
-            int(row["movieId"]),
-            row["title"],
-            int(row["release_year"]) if pd.notna(row["release_year"]) else None,
-            found,
-            row["Director"] if pd.notna(row["Director"]) else None,
-            row["Actors"] if pd.notna(row["Actors"]) else None,
-            row["Plot"] if pd.notna(row["Plot"]) else None,
-            row["Released"] if pd.notna(row["Released"]) else None,
-            row["Runtime"] if pd.notna(row["Runtime"]) else None,
-            row["Genre"] if pd.notna(row["Genre"]) else None,
-            row["Language"] if pd.notna(row["Language"]) else None,
-            row["Country"] if pd.notna(row["Country"]) else None,
-            row["BoxOffice"] if pd.notna(row["BoxOffice"]) else None,
-            float(row["imdbRating"]) if pd.notna(row["imdbRating"]) else None,
-            row["Awards"] if pd.notna(row["Awards"]) else None
-        )
-
-        records.append(record)
-
     try:
 
-        cursor.executemany(query, records)
-        connection.commit()
+        # -----------------------------------
+        # 1. LOAD MOVIES
+        # -----------------------------------
 
-        print("\nMovies loaded successfully!")
-        print("Total records processed:", len(records))
-        print("Records inserted:", cursor.rowcount)
+        movie_query = """
+            INSERT IGNORE INTO movies (
+                movie_id, title, release_year, omdb_found,
+                director, actors, plot, released, runtime,
+                omdb_genre, language, country, box_office,
+                imdb_rating, awards
+            )
+            VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s
+            )
+        """
 
-    except mysql.connector.Error as error:
+        movie_records = []
 
-        connection.rollback()
-        print("Error loading movies:", error)
+        for _, row in movies.iterrows():
 
-    finally:
+            found = clean_value(row["OMDbFound"])
 
-        cursor.close()
-        connection.close()
+            if found is not None:
+                found = str(found).strip().lower() in (
+                    "true", "1", "yes"
+                )
 
+            record = (
+                int(row["movieId"]),
+                row["title"],
+                clean_value(row["release_year"]),
+                found,
+                clean_value(row["Director"]),
+                clean_value(row["Actors"]),
+                clean_value(row["Plot"]),
+                clean_value(row["Released"]),
+                clean_value(row["Runtime"]),
+                clean_value(row["Genre"]),
+                clean_value(row["Language"]),
+                clean_value(row["Country"]),
+                clean_value(row["BoxOffice"]),
+                clean_value(row["imdbRating"]),
+                clean_value(row["Awards"])
+            )
 
-# --------------------------------------------------
-# 3. LOAD RATINGS TABLE
-# --------------------------------------------------
+            movie_records.append(record)
 
-def load_ratings():
+        cursor.executemany(movie_query, movie_records)
 
-    # Extract ratings data
-    movies, ratings = extract_data()
-
-    # Convert Unix timestamp into datetime
-    ratings["timestamp"] = pd.to_datetime(
-        ratings["timestamp"],
-        unit="s",
-        errors="coerce"
-    )
-
-    connection = create_connection()
-
-    if connection is None:
-        return
-
-    cursor = connection.cursor()
-
-    query = """
-        INSERT IGNORE INTO ratings (
-            user_id,
-            movie_id,
-            rating,
-            timestamp
-        )
-        VALUES (%s, %s, %s, %s)
-    """
-
-    records = []
-
-    for row in ratings.itertuples(index=False):
-
-        timestamp = (
-            row.timestamp.to_pydatetime()
-            if pd.notna(row.timestamp)
-            else None
-        )
-
-        record = (
-            int(row.userId),
-            int(row.movieId),
-            float(row.rating),
-            timestamp
-        )
-
-        records.append(record)
-
-    try:
-
-        cursor.executemany(query, records)
-        connection.commit()
-
-        print("\nRatings loaded successfully!")
-        print("Total records processed:", len(records))
-        print("Records inserted:", cursor.rowcount)
-
-    except mysql.connector.Error as error:
-
-        connection.rollback()
-        print("Error loading ratings:", error)
-
-    finally:
-
-        cursor.close()
-        connection.close()
+        print("Movies processed:", len(movie_records))
+        print("Movies inserted:", cursor.rowcount)
 
 
-# --------------------------------------------------
-# 4. LOAD GENRES TABLE
-# --------------------------------------------------
+        # -----------------------------------
+        # 2. LOAD RATINGS
+        # -----------------------------------
 
-def load_genres():
+        ratings_query = """
+            INSERT IGNORE INTO ratings (
+                user_id, movie_id, rating, timestamp
+            )
+            VALUES (%s, %s, %s, %s)
+        """
 
-    # Extract MovieLens data
-    movies, ratings = extract_data()
+        rating_records = []
 
-    # Split genres into individual values
-    genre_list = movies["genres"].str.split("|").explode()
+        for row in ratings.itertuples(index=False):
 
-    # Remove extra spaces
-    genre_list = genre_list.str.strip()
+            timestamp = row.timestamp
 
-    # Remove the MovieLens placeholder for missing genres
-    genre_list = genre_list[
-        (genre_list != "(no genres listed)") &
-        (genre_list != "")
-    ]
+            if pd.notna(timestamp):
+                timestamp = pd.Timestamp(timestamp).to_pydatetime()
+            else:
+                timestamp = None
 
-    # Get unique genres
-    unique_genres = sorted(genre_list.dropna().unique())
+            record = (
+                int(row.userId),
+                int(row.movieId),
+                float(row.rating),
+                timestamp
+            )
 
-    connection = create_connection()
+            rating_records.append(record)
 
-    if connection is None:
-        return
+        cursor.executemany(ratings_query, rating_records)
 
-    cursor = connection.cursor()
+        print("Ratings processed:", len(rating_records))
+        print("Ratings inserted:", cursor.rowcount)
 
-    query = """
-        INSERT IGNORE INTO genres (genre_name)
-        VALUES (%s)
-    """
 
-    records = [(genre,) for genre in unique_genres]
+        # -----------------------------------
+        # 3. LOAD GENRES
+        # -----------------------------------
 
-    try:
+        unique_genres = set()
 
-        cursor.executemany(query, records)
-        connection.commit()
+        for genre_list in movies["genres"]:
 
-        print("\nGenres loaded successfully!")
-        print("Unique genres processed:", len(records))
+            if isinstance(genre_list, list):
+
+                for genre in genre_list:
+
+                    if genre != "(no genres listed)" and genre.strip():
+                        unique_genres.add(genre.strip())
+
+        genre_query = """
+            INSERT IGNORE INTO genres (genre_name)
+            VALUES (%s)
+        """
+
+        genre_records = [
+            (genre,) for genre in sorted(unique_genres)
+        ]
+
+        cursor.executemany(genre_query, genre_records)
+
+        print("Genres processed:", len(genre_records))
         print("Genres inserted:", cursor.rowcount)
 
-    except mysql.connector.Error as error:
 
-        connection.rollback()
-        print("Error loading genres:", error)
+        # -----------------------------------
+        # 4. LOAD MOVIE_GENRES
+        # -----------------------------------
 
-    finally:
-
-        cursor.close()
-        connection.close()
-
-
-# --------------------------------------------------
-# 5. LOAD MOVIE_GENRES TABLE
-# --------------------------------------------------
-
-def load_movie_genres():
-
-    # Extract MovieLens data
-    movies, ratings = extract_data()
-
-    # Split movie genres
-    movies["genres"] = movies["genres"].str.split("|")
-
-    # Create MySQL connection
-    connection = create_connection()
-
-    if connection is None:
-        return
-
-    cursor = connection.cursor()
-
-    try:
-
-        # Get genre names and their IDs
-        cursor.execute("SELECT genre_id, genre_name FROM genres")
+        cursor.execute(
+            "SELECT genre_id, genre_name FROM genres"
+        )
 
         genre_mapping = {
             genre_name: genre_id
             for genre_id, genre_name in cursor.fetchall()
         }
 
-        # Prepare movie and genre relationships
-        records = []
+        movie_genre_records = []
 
         for _, row in movies.iterrows():
 
             movie_id = int(row["movieId"])
+            genre_list = row["genres"]
 
-            for genre in row["genres"]:
+            if isinstance(genre_list, list):
 
-                if genre == "(no genres listed)":
-                    continue
+                for genre in genre_list:
 
-                genre_id = genre_mapping.get(genre)
+                    genre_id = genre_mapping.get(genre)
 
-                if genre_id is not None:
-                    records.append((movie_id, genre_id))
+                    if genre_id is not None:
+                        movie_genre_records.append(
+                            (movie_id, genre_id)
+                        )
 
-        query = """
+        movie_genre_query = """
             INSERT IGNORE INTO movie_genres (
-                movie_id,
-                genre_id
+                movie_id, genre_id
             )
             VALUES (%s, %s)
         """
 
-        cursor.executemany(query, records)
+        cursor.executemany(
+            movie_genre_query,
+            movie_genre_records
+        )
 
+        print("Movie-genre relationships processed:",
+              len(movie_genre_records))
+
+        print("Movie-genre relationships inserted:",
+              cursor.rowcount)
+
+
+        # Save all changes
         connection.commit()
 
-        print("\nMovie genres loaded successfully!")
-        print("Relationships processed:", len(records))
-        print("Relationships inserted:", cursor.rowcount)
+        print("\nAll four tables loaded successfully!")
 
-    except mysql.connector.Error as error:
+    except Exception as error:
 
         connection.rollback()
-        print("Error loading movie genres:", error)
+
+        print("Data loading failed:", error)
+
+        raise
 
     finally:
 
         cursor.close()
         connection.close()
-
-
-# --------------------------------------------------
-# 6. RUN COMPLETE DATA LOADING PROCESS
-# --------------------------------------------------
-
-if __name__ == "__main__":
-
-    print("\nStarting Movie Data Pipeline...")
-
-    load_movies()
-
-    load_ratings()
-
-    load_genres()
-
-    load_movie_genres()
-
-    print("\nMovie Data Pipeline completed!")
