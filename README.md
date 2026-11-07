@@ -13,6 +13,7 @@ The data is explored, transformed, enriched with additional movie information wh
 
 ## 2. ETL Architecture
 
+<img width="2532" height="1002" alt="etl_architecture" src="https://github.com/user-attachments/assets/72339ad5-4f92-4caa-9a78-03891efa5af9" />
 
 
 ### Extract — `src/extract.py`
@@ -51,6 +52,7 @@ Recorded EDA findings:
 
 ## 4. MySQL Database Design
 
+<img width="2192" height="1342" alt="database_schema" src="https://github.com/user-attachments/assets/fb3e9046-bd2e-43ce-973d-9bc1da97f3c6" />
 
 
 The database contains four tables:
