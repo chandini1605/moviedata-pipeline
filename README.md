@@ -215,7 +215,7 @@ Open `queries.sql` in MySQL Workbench and execute the queries.
 
 ## Author
 
-**Chandini Reddy**  
+**Chandini **  
 GitHub: https://github.com/chandini1605  
 Repository: https://github.com/chandini1605/moviedata-pipeline
 
