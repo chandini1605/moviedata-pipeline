@@ -13,7 +13,7 @@ The data is explored, transformed, enriched with additional movie information wh
 
 ## 2. ETL Architecture
 
-![ETL architecture diagram](docs/images/etl_architecture.png)
+
 
 ### Extract — `src/extract.py`
 Reads `movies.csv` and `ratings.csv` from the `data/` directory. It checks that both files exist before loading them into Pandas DataFrames.
@@ -51,7 +51,7 @@ Recorded EDA findings:
 
 ## 4. MySQL Database Design
 
-![MySQL schema and relationships](docs/images/database_schema.png)
+
 
 The database contains four tables:
 
