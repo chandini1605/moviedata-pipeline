@@ -1,2 +1,2 @@
 # moviedata-pipeline
-building a simple movie data pipeline
+Building a simple movie data pipeline
