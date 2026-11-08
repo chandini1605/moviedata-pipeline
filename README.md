@@ -31,7 +31,7 @@ moviedata-pipeline/
 ├── schema.sql              table definitions
 ├── queries.sql             the four analysis queries
 ├── requirements.txt
-├── .env.example            copy this to .env and fill in your values
+├── .env           copy this to .env and fill in your values
 └── README.md
 ```
 
