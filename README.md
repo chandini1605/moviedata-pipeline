@@ -6,9 +6,9 @@ This pipeline reads the MovieLens small dataset (movies and ratings), pulls extr
 
 1. Reads `movies.csv` and `ratings.csv` from the `data/` folder.
 2. Looks up each movie on OMDb (director, actors, plot, runtime, box office, IMDb rating, awards) and saves the results to `data/omdb_enriched.csv`.
-3. Cleans the data: converts timestamps, pulls the release year out of the title, splits the genres.
+3. Cleans the data: converts timestamps, pulls the release year out of the title, splits the genres, turns runtime and box office into numbers.
 4. Loads four tables into MySQL.
-5. `queries.sql` answers the analysis questions from the assignment.
+5. `queries.sql` answers the analysis questions.
 
 The dataset has 9,742 movies and 100,836 ratings.
 
@@ -22,10 +22,10 @@ moviedata-pipeline/
 ├── eda/                    notebook where I explored the data first
 ├── src/
 │   ├── extract.py          reads the CSV files
-│   ├── transform.py        cleaning and genre/year handling
-│   ├── enrich.py           one OMDb lookup
+│   ├── transform.py        timestamps, release year, genre splitting
+│   ├── enrich.py           OMDb lookup, title cleaning, API error handling
 │   ├── batch_enrich.py     runs the lookups in batches and saves as it goes
-│   └── load.py             writes everything to MySQL
+│   └── load.py             cleans OMDb values and writes everything to MySQL
 ├── tests/
 ├── etl.py                  main script
 ├── schema.sql              table definitions
@@ -70,9 +70,11 @@ python etl.py                        # transforms and loads everything
 mysql -u root -p < queries.sql       # runs the analysis queries
 ```
 
-You can run `schema.sql` and `etl.py` as many times as you like without getting duplicate rows.
+If you already created the tables with an older version of `schema.sql`, drop the `movie_analytics` database first. `CREATE TABLE IF NOT EXISTS` won't change the column types of tables that already exist.
 
-A note on the OMDb step: the free API key only allows about 1,000 requests a day, and there are nearly 10,000 movies. So `batch_enrich.py` stops after a fixed number of calls and remembers what it has already done. Run it again the next day and it carries on where it stopped.
+You can run `etl.py` as many times as you like. It updates existing rows instead of creating duplicates.
+
+A note on the OMDb step: the free API key only allows about 1,000 requests a day, and there are nearly 10,000 movies. So `batch_enrich.py` stops after 980 requests and picks up where it left off the next time. Run it once a day until the enrichment file covers all the movies.
 
 ## Database design
 
@@ -87,6 +89,8 @@ There are four tables:
 
 The main thing I thought about was genres. In the CSV they come as one string like `Adventure|Animation|Comedy`, which is awkward to query. A movie can have many genres and a genre belongs to many movies, so I used a separate `genres` table and a link table between the two. That makes "average rating per genre" a normal join. Ratings got their own table because one movie has lots of ratings. The OMDb details stay on `movies` because each movie has only one set of them.
 
+I also added indexes on the columns the queries filter and join on (`release_year`, `director`, `movie_id` and `genre_id` in the link tables, and `rating`).
+
 Row counts after loading: movies 9,742, ratings 100,836, genres 19, movie_genres 22,050.
 
 ## How I handled messy data
@@ -94,21 +98,23 @@ Row counts after loading: movies 9,742, ratings 100,836, genres 19, movie_genres
 - **Release year:** taken from the end of the title, e.g. `Toy Story (1995)`. 13 titles have no year, so those are left empty. I didn't want to guess.
 - **Genres:** 34 movies have `(no genres listed)`. I didn't store that as a real genre.
 - **Timestamps:** the Unix numbers in `ratings.csv` are converted to proper dates.
-- **Missing OMDb values:** stored as NULL. Dates and IMDb ratings are converted to proper types, and anything that can't be converted becomes NULL.
-- **Movie not found on OMDb:** the movie is still kept, with `omdb_found = False`, so its ratings and genres still count in the analysis.
-- **Network or API error:** the batch script stops, keeps everything it already saved, and can be restarted.
-- **Duplicates:** primary keys plus `INSERT IGNORE`, all inside one transaction, so a failed load rolls back cleanly.
+- **Runtime and box office:** OMDb sends these as text like `81 min` and `$229,947,062`. They are converted to whole numbers (minutes and dollars) before loading.
+- **Missing OMDb values:** blanks and `N/A` become NULL. Dates and IMDb ratings are converted to proper types, and anything that can't be converted also becomes NULL.
+- **Movie not found on OMDb:** the movie is still kept, with `omdb_found` set to false, so its ratings and genres still count in the analysis.
+- **API problems:** an invalid key, a daily-limit message, or any unexpected OMDb error stops the batch straight away with a clear message. Only a plain "Movie not found" counts as a miss. Everything fetched so far is already saved.
+- **Reruns:** the load uses `INSERT ... ON DUPLICATE KEY UPDATE` inside one transaction, so a rerun updates changed rows, never duplicates them, and a failed load rolls back cleanly.
+- **Logging:** `etl.py` logs each step and re-raises any error, so a failed run doesn't look like a success.
 
 ## The analysis queries
 
 `queries.sql` answers:
 
-1. Which movie has the highest average rating
-2. The top 5 genres by average rating
-3. The director with the most movies
-4. The average rating for each release year
+1. **Highest average rating.** Only movies with at least 10 ratings are counted, because a movie with a single 5-star rating shouldn't win. Ties are broken by number of ratings, then by title.
+2. **Top 5 genres by average rating.**
+3. **Director with the most movies.** Some movies have several directors in one text field, so a recursive query splits them and each director is counted separately.
+4. **Average rating for each release year.**
 
-Two things to keep in mind when reading the results. For Q1, lots of movies have only one or two ratings, so a perfect 5.0 doesn't mean much by itself. It's better to look at the rating count too, or only count movies with at least 10 ratings. For Q3, only movies that OMDb matched have a director, so the answer is based on the movies I've enriched so far, not the whole dataset.
+Q3 only covers movies that OMDb has matched, so the answer depends on how much of the dataset has been enriched.
 
 ## Choices and assumptions
 
@@ -119,27 +125,29 @@ Two things to keep in mind when reading the results. For Q1, lots of movies have
 
 ## Problems I ran into
 
-**The API limit.** I couldn't fetch all 9,742 movies in one go. I made the script save each result straight away and skip movies it has already done, so I can run it day after day.
+**The API limit.** I couldn't fetch all 9,742 movies in one go. The script saves each result straight away, skips movies it has already fetched, and stops cleanly when the limit is hit, so I can run it day after day.
 
-**Titles that don't match.** MovieLens writes titles like `Usual Suspects, The (1995)` or `Seven (a.k.a. Se7en) (1995)`, and OMDb doesn't recognise those. Out of the 990 movies I tried, OMDb found 633 and missed 357. Looking at the misses, around 280 of them are because of this title format and not because the movie is missing from OMDb. Right now I only strip the year and send the rest as it is, so fixing the titles is the first thing I'd improve.
+**Titles that don't match.** MovieLens writes titles like `Usual Suspects, The (1995)` or `Seven (a.k.a. Se7en) (1995)`, and OMDb doesn't recognise those. My first batch of 990 movies found only 633 on OMDb. Looking at the misses, around 280 were caused by this title format and not by missing movies. I fixed it by moving "The/A/An" back to the front, removing the alternate-title brackets, and retrying without the year if the first search fails. After that, 876 of the next 887 movies were found. The old misses are removed from the file and fetched again.
 
-**Missing and inconsistent values.** OMDb returns blanks and odd formats for some fields, so I convert everything to NULL or a proper type before it goes into MySQL.
+**Silent failures.** At first, a bad API key or a failed database connection could still end with a "pipeline completed" message. Now those errors stop the run.
+
+**Multiple directors in one field.** About 5% of matched movies list two or more directors. Counting the whole text as one director gave wrong answers for Q3, so the query now splits them.
 
 ## Limitations
 
-- Only 990 of the 9,742 movies have been run through OMDb so far, so the director question only covers a small part of the data.
-- Box office (like `$229,947,062`) and runtime (like `81 min`) are still stored as text.
-- If a movie has two directors, they are stored together as one text value.
-- `INSERT IGNORE` stops duplicates, but it won't update a row if the source data changes later.
+- Not every movie has been enriched yet. At the last run the enrichment file covered about 15% of the movies, so director results are based on that part of the data. Each daily run adds up to 980 more.
+- Directors and actors are still stored as plain text on `movies`. A separate `directors` table (like `genres`) would be cleaner.
+- Movies that OMDb really doesn't have are tried again on every batch run, which uses up some of the daily quota.
+- The tests in `tests/` are simple check scripts, not automated tests with assertions.
 
 ## What I'd do next
 
-- Clean up the titles before calling the API (move "The" back to the front, remove the alternate-title brackets, retry without the year) and finish enriching all the movies.
-- Turn box office and runtime into numbers.
-- Add `directors` and `movie_directors` tables, the same way I did for genres, so the director query is exact.
-- Switch to `INSERT ... ON DUPLICATE KEY UPDATE` so reruns also update changed rows.
+- Use the IMDb IDs from `links.csv` for exact matching instead of searching by title.
+- Add `directors` and `movie_directors` tables, the same way I did for genres.
+- Remember which movies OMDb really doesn't have, so they aren't requested again.
 - Add a decade column and rating counts per movie.
-- For a real production setup: schedule the job with something like Airflow, call the API with retries and rate limiting, bulk load the ratings, add logging and data-quality checks, and use Docker so setup is the same everywhere.
+- Turn the check scripts into real `pytest` tests.
+- For a real production setup: schedule the job with something like Airflow, call the API with retries and rate limiting, bulk load the ratings, add data-quality checks, and use Docker so setup is the same everywhere.
 
 ## Author
 
