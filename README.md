@@ -1,161 +1,56 @@
 # Movie Data Pipeline
 
-An end-to-end data engineering project that extracts movie and rating data from the **MovieLens Small** dataset, transforms it using Python, enriches movie details through the **OMDb API**, and loads the results into a relational **MySQL** database for SQL analysis.
+This pipeline reads the MovieLens small dataset (movies and ratings), pulls extra details for each movie from the OMDb API, cleans everything up in Python, loads it into MySQL, and then answers four questions with SQL.
 
-## 1. Project Overview
+## What it does
 
-The project uses two MovieLens files:
+1. Reads `movies.csv` and `ratings.csv` from the `data/` folder.
+2. Looks up each movie on OMDb (director, actors, plot, runtime, box office, IMDb rating, awards) and saves the results to `data/omdb_enriched.csv`.
+3. Cleans the data: converts timestamps, pulls the release year out of the title, splits the genres.
+4. Loads four tables into MySQL.
+5. `queries.sql` answers the analysis questions from the assignment.
 
-- `movies.csv` — movie ID, title and genres.
-- `ratings.csv` — user ID, movie ID, rating and timestamp.
+The dataset has 9,742 movies and 100,836 ratings.
 
-The data is explored, transformed, enriched with additional movie information where available, and stored in MySQL. SQL queries are then used to answer the assignment questions.
+![ETL architecture](https://github.com/user-attachments/assets/72339ad5-4f92-4caa-9a78-03891efa5af9)
 
-## 2. ETL Architecture
-
-<img width="2532" height="1002" alt="etl_architecture" src="https://github.com/user-attachments/assets/72339ad5-4f92-4caa-9a78-03891efa5af9" />
-
-
-### Extract — `src/extract.py`
-Reads `movies.csv` and `ratings.csv` from the `data/` directory. It checks that both files exist before loading them into Pandas DataFrames.
-
-### Transform — `src/transform.py`
-- Converts Unix timestamps into readable datetime values.
-- Extracts a four-digit release year from movie titles when available.
-- Splits pipe-separated genre values into individual genres.
-
-Titles without a standard year in parentheses remain without a release year rather than being assigned an assumed value.
-
-### Enrich — `src/enrich.py` and `src/batch_enrich.py`
-Calls the OMDb API using a movie title and, when available, its year. It collects details such as director, actors, plot, release date, runtime, genre, language, country, box office, IMDb rating and awards. Batch results are saved in `data/omdb_enriched.csv`.
-
-**Recorded batch result:** 990 movies were processed; OMDb found 633 and did not find 357. Unmatched records are retained in the enrichment output.
-
-### Load — `src/load.py`
-Connects to MySQL and loads movie, rating, genre and movie-to-genre records. `INSERT IGNORE` is used to avoid duplicate primary-key records when loading data again.
-
-### Orchestration — `etl.py`
-Runs the main sequence: extract MovieLens data, transform it, read the saved OMDb enrichment CSV, and load the data into MySQL. The OMDb batch enrichment step is run separately before this orchestration script.
-
-## 3. Dataset and EDA Highlights
-
-| Dataset | Records | Columns |
-|---|---:|---:|
-| `movies.csv` | 9,742 | 3 |
-| `ratings.csv` | 100,836 | 4 |
-
-Recorded EDA findings:
-- No missing values were identified in the original CSV files.
-- No duplicate movie records or duplicate `(userId, movieId)` rating pairs were identified.
-- The average source rating is approximately **3.50**.
-- 13 movie titles did not contain a standard four-digit year in parentheses.
-
-## 4. MySQL Database Design
-
-<img width="2192" height="1342" alt="database_schema" src="https://github.com/user-attachments/assets/fb3e9046-bd2e-43ce-973d-9bc1da97f3c6" />
-
-
-The database contains four tables:
-
-| Table | Purpose | Keys |
-|---|---|---|
-| `movies` | MovieLens movie information and available OMDb details | `movie_id` primary key |
-| `ratings` | User ratings for movies | Composite primary key (`user_id`, `movie_id`); `movie_id` is a foreign key |
-| `genres` | Unique genre names | `genre_id` primary key; `genre_name` unique |
-| `movie_genres` | Maps movies to their genres | Composite primary key (`movie_id`, `genre_id`); both columns are foreign keys |
-
-### Relationships explained
-
-- **movies → ratings (one-to-many):** one movie can have ratings from many users; each rating refers to one movie.
-- **movies → movie_genres (one-to-many):** a movie can have several genre links.
-- **genres → movie_genres (one-to-many):** a genre can be linked to many movies.
-- **movies ↔ genres (many-to-many):** a movie can have multiple genres and a genre can belong to multiple movies. `movie_genres` is the junction table that implements this relationship.
-
-The `ratings` table uses `(user_id, movie_id)` as its composite primary key.
-
-### Recorded database row counts
-
-| Table | Records |
-|---|---:|
-| `movies` | 9,742 |
-| `ratings` | 100,836 |
-| `genres` | 19 |
-| `movie_genres` | 22,050 |
-
-## 5. SQL Analysis
-
-`queries.sql` contains queries to:
-1. Find the movie with the highest average rating.
-2. Find the top five genres by average rating.
-3. Find the director with the most movies.
-4. Calculate average ratings by release year.
-
-## 6. Project Structure
+## Folder layout
 
 ```text
 moviedata-pipeline/
-├── data/
-│   ├── movies.csv
-│   ├── ratings.csv
-│   └── omdb_enriched.csv
-├── docs/
-│   └── images/
-│       ├── etl_architecture.png
-│       └── database_schema.png
-├── eda/
-│   └── data_exploration.ipynb
+├── data/                   movies.csv, ratings.csv, omdb_enriched.csv
+├── eda/                    notebook where I explored the data first
 ├── src/
-│   ├── __init__.py
-│   ├── extract.py
-│   ├── transform.py
-│   ├── enrich.py
-│   ├── batch_enrich.py
-│   └── load.py
+│   ├── extract.py          reads the CSV files
+│   ├── transform.py        cleaning and genre/year handling
+│   ├── enrich.py           one OMDb lookup
+│   ├── batch_enrich.py     runs the lookups in batches and saves as it goes
+│   └── load.py             writes everything to MySQL
 ├── tests/
-├── etl.py
-├── schema.sql
-├── queries.sql
+├── etl.py                  main script
+├── schema.sql              table definitions
+├── queries.sql             the four analysis queries
 ├── requirements.txt
-├── .env
-├── .gitignore
+├── .env.example            copy this to .env and fill in your values
 └── README.md
 ```
 
-## 7. Technologies Used
+## How to run it
 
-- Python and Pandas — extraction and transformation.
-- Requests — OMDb API calls.
-- python-dotenv — environment variable configuration.
-- MySQL and mysql-connector-python — relational storage and database connectivity.
-- Jupyter Notebook — exploratory data analysis.
-- SQL — analytical queries.
-- Git and GitHub — version control.
-
-## 8. Setup and Run
-
-### 1. Clone the repository
+You need Python 3.10 or newer, MySQL 8, and a free OMDb API key (https://www.omdbapi.com/apikey.aspx).
 
 ```bash
 git clone https://github.com/chandini1605/moviedata-pipeline.git
 cd moviedata-pipeline
-```
 
-### 2. Create and activate a virtual environment (Windows)
-
-```bash
 python -m venv venv
-venv\\Scripts\\activate
-```
-
-### 3. Install dependencies
-
-```bash
+source venv/bin/activate        # on Windows: venv\Scripts\activate
 pip install -r requirements.txt
+
+cp .env.example .env            # then open .env and fill in your details
 ```
 
-### 4. Configure `.env`
-
-Create `.env` in the project root and add your own credentials:
+Your `.env` should look like this:
 
 ```env
 OMDB_API_KEY=your_omdb_api_key
@@ -164,59 +59,88 @@ MYSQL_USER=root
 MYSQL_PASSWORD=your_mysql_password
 ```
 
-Do not commit `.env` or expose API keys and passwords. Ensure `.env` is listed in `.gitignore`.
+The `.env` file is in `.gitignore`, so it never gets committed.
 
-### 5. Create database tables
-
-Open `schema.sql` in MySQL Workbench and execute it. This creates the `movie_analytics` database and its four tables.
-
-### 6. Run OMDb batch enrichment
+Then run these in order:
 
 ```bash
-python -m src.batch_enrich
+mysql -u root -p < schema.sql        # creates the database and tables
+python -m src.batch_enrich           # fetches OMDb data (see note below)
+python etl.py                        # transforms and loads everything
+mysql -u root -p < queries.sql       # runs the analysis queries
 ```
 
-The OMDb API has a daily request limit. The batch script may need to be run more than once if it is configured to process a limited number of records per run.
+You can run `schema.sql` and `etl.py` as many times as you like without getting duplicate rows.
 
-### 7. Run the ETL pipeline
+A note on the OMDb step: the free API key only allows about 1,000 requests a day, and there are nearly 10,000 movies. So `batch_enrich.py` stops after a fixed number of calls and remembers what it has already done. Run it again the next day and it carries on where it stopped.
 
-```bash
-python etl.py
-```
+## Database design
 
-### 8. Run SQL queries
+![Database schema](https://github.com/user-attachments/assets/fb3e9046-bd2e-43ce-973d-9bc1da97f3c6)
 
-Open `queries.sql` in MySQL Workbench and execute the queries.
+There are four tables:
 
-## 9. Data Quality and Rerun Behaviour
+- **movies**: one row per movie, with the MovieLens fields plus whatever OMDb gave back. There is an `omdb_found` column so I can tell which movies were matched.
+- **ratings**: one row per user rating. The primary key is (`user_id`, `movie_id`), and `movie_id` points to `movies`.
+- **genres**: one row per genre name.
+- **movie_genres**: links movies to genres.
 
-- The extraction step checks that the source files exist.
-- Missing release years are not guessed.
-- Movies not found by OMDb are retained in the enrichment output.
-- Primary and foreign keys enforce database relationships.
-- `INSERT IGNORE` helps prevent duplicate records on subsequent loads.
+The main thing I thought about was genres. In the CSV they come as one string like `Adventure|Animation|Comedy`, which is awkward to query. A movie can have many genres and a genre belongs to many movies, so I used a separate `genres` table and a link table between the two. That makes "average rating per genre" a normal join. Ratings got their own table because one movie has lots of ratings. The OMDb details stay on `movies` because each movie has only one set of them.
 
-## 10. Key Outcomes
+Row counts after loading: movies 9,742, ratings 100,836, genres 19, movie_genres 22,050.
 
-- Developed a modular Python ETL workflow.
-- Integrated an external API for movie enrichment.
-- Designed a relational MySQL database with four tables.
-- Implemented primary keys, foreign keys and a junction table.
-- Loaded 9,742 movies and 100,836 ratings.
-- Prepared SQL analysis for movies, genres, directors and release years.
+## How I handled messy data
 
-## 11. Future Improvements
+- **Release year:** taken from the end of the title, e.g. `Toy Story (1995)`. 13 titles have no year, so those are left empty. I didn't want to guess.
+- **Genres:** 34 movies have `(no genres listed)`. I didn't store that as a real genre.
+- **Timestamps:** the Unix numbers in `ratings.csv` are converted to proper dates.
+- **Missing OMDb values:** stored as NULL. Dates and IMDb ratings are converted to proper types, and anything that can't be converted becomes NULL.
+- **Movie not found on OMDb:** the movie is still kept, with `omdb_found = False`, so its ratings and genres still count in the analysis.
+- **Network or API error:** the batch script stops, keeps everything it already saved, and can be restarted.
+- **Duplicates:** primary keys plus `INSERT IGNORE`, all inside one transaction, so a failed load rolls back cleanly.
 
-- Add incremental loading for new or changed records.
-- Add structured logging and detailed error reporting.
-- Introduce automated data-quality checks.
-- Improve API retry and rate-limit handling.
-- Build a Power BI dashboard from the MySQL data.
+## The analysis queries
+
+`queries.sql` answers:
+
+1. Which movie has the highest average rating
+2. The top 5 genres by average rating
+3. The director with the most movies
+4. The average rating for each release year
+
+Two things to keep in mind when reading the results. For Q1, lots of movies have only one or two ratings, so a perfect 5.0 doesn't mean much by itself. It's better to look at the rating count too, or only count movies with at least 10 ratings. For Q3, only movies that OMDb matched have a director, so the answer is based on the movies I've enriched so far, not the whole dataset.
+
+## Choices and assumptions
+
+- I picked MySQL because it's close to what a real team would use, with foreign keys and transactions.
+- I kept the OMDb step separate from the load step. Because of the daily limit, I save every API response to a CSV, so I can re-run the load as often as I want without using up any API calls.
+- I searched OMDb by title and year, since MovieLens `movies.csv` has no IMDb IDs. They are in `links.csv`, but the assignment only asks for two files.
+- I assumed the year in brackets at the end of a title is the release year, and that each user rates a movie only once. The notebook confirms there are no duplicate (user, movie) pairs.
+
+## Problems I ran into
+
+**The API limit.** I couldn't fetch all 9,742 movies in one go. I made the script save each result straight away and skip movies it has already done, so I can run it day after day.
+
+**Titles that don't match.** MovieLens writes titles like `Usual Suspects, The (1995)` or `Seven (a.k.a. Se7en) (1995)`, and OMDb doesn't recognise those. Out of the 990 movies I tried, OMDb found 633 and missed 357. Looking at the misses, around 280 of them are because of this title format and not because the movie is missing from OMDb. Right now I only strip the year and send the rest as it is, so fixing the titles is the first thing I'd improve.
+
+**Missing and inconsistent values.** OMDb returns blanks and odd formats for some fields, so I convert everything to NULL or a proper type before it goes into MySQL.
+
+## Limitations
+
+- Only 990 of the 9,742 movies have been run through OMDb so far, so the director question only covers a small part of the data.
+- Box office (like `$229,947,062`) and runtime (like `81 min`) are still stored as text.
+- If a movie has two directors, they are stored together as one text value.
+- `INSERT IGNORE` stops duplicates, but it won't update a row if the source data changes later.
+
+## What I'd do next
+
+- Clean up the titles before calling the API (move "The" back to the front, remove the alternate-title brackets, retry without the year) and finish enriching all the movies.
+- Turn box office and runtime into numbers.
+- Add `directors` and `movie_directors` tables, the same way I did for genres, so the director query is exact.
+- Switch to `INSERT ... ON DUPLICATE KEY UPDATE` so reruns also update changed rows.
+- Add a decade column and rating counts per movie.
+- For a real production setup: schedule the job with something like Airflow, call the API with retries and rate limiting, bulk load the ratings, add logging and data-quality checks, and use Docker so setup is the same everywhere.
 
 ## Author
 
-**Chandini **  
-GitHub: https://github.com/chandini1605  
-Repository: https://github.com/chandini1605/moviedata-pipeline
-
-
+Chandini, https://github.com/chandini1605
