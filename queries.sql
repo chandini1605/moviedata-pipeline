@@ -41,25 +41,36 @@ LIMIT 5;
 
 -- Q3. Find the director with the most movies
 
+-- Q3. Director with the most movies (multi-director movies counted for each director)
 
-    -- Extract the remaining directors
+WITH RECURSIVE director_split AS (
+
+    -- Take the first director from each movie
+    SELECT
+        movie_id,
+        TRIM(SUBSTRING_INDEX(director, ',', 1)) AS director_name,
+        CASE
+            WHEN INSTR(director, ',') > 0
+            THEN TRIM(SUBSTRING(director, INSTR(director, ',') + 1))
+            ELSE NULL
+        END AS remaining_directors
+    FROM movies
+    WHERE director IS NOT NULL
+
+    UNION ALL
+
+    -- Take the next director from what's left
     SELECT
         movie_id,
         TRIM(SUBSTRING_INDEX(remaining_directors, ',', 1)),
         CASE
             WHEN INSTR(remaining_directors, ',') > 0
-            THEN TRIM(
-                SUBSTRING(
-                    remaining_directors,
-                    INSTR(remaining_directors, ',') + 1
-                )
-            )
+            THEN TRIM(SUBSTRING(remaining_directors, INSTR(remaining_directors, ',') + 1))
             ELSE NULL
         END
     FROM director_split
     WHERE remaining_directors IS NOT NULL
       AND remaining_directors <> ''
-
 )
 
 SELECT
@@ -69,9 +80,7 @@ FROM director_split
 WHERE director_name <> ''
   AND UPPER(director_name) <> 'N/A'
 GROUP BY director_name
-ORDER BY
-    total_movies DESC,
-    director_name ASC
+ORDER BY total_movies DESC, director_name ASC
 LIMIT 1;
 
 
