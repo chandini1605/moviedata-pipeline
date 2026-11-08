@@ -1,6 +1,7 @@
 
 from pathlib import Path
 import pandas as pd
+import logging
 
 from src.extract import extract_data
 from src.transform import transform_data
@@ -10,38 +11,46 @@ from src.load import load_data
 # Get project directory
 project_dir = Path(__file__).resolve().parent
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+logger = logging.getLogger(__name__)
+
 
 def run_pipeline():
 
-    print("\n===================================")
-    print("       MOVIE DATA PIPELINE")
-    print("===================================")
+    logger.info("===================================")
+    logger.info("       MOVIE DATA PIPELINE")
+    logger.info("===================================")
 
     try:
 
         # STEP 1: EXTRACT
-        print("\nSTEP 1: Extracting data...")
+        logger.info("STEP 1: Extracting data...")
 
         movies, ratings = extract_data()
 
-        print("Movies extracted:", len(movies))
-        print("Ratings extracted:", len(ratings))
+        logger.info("Movies extracted: %s", len(movies))
+        logger.info("Ratings extracted: %s", len(ratings))
 
 
         # STEP 2: TRANSFORM
-        print("\nSTEP 2: Transforming data...")
+        logger.info("STEP 2: Transforming data...")
 
         movies, ratings = transform_data(
             movies,
             ratings
         )
 
-        print("Movies transformed:", len(movies))
-        print("Ratings transformed:", len(ratings))
+        logger.info("Movies transformed: %s", len(movies))
+        logger.info("Ratings transformed: %s", len(ratings))
 
 
         # STEP 3: OMDb ENRICHMENT
-        print("\nSTEP 3: Loading OMDb enrichment data...")
+        logger.info("STEP 3: Loading OMDb enrichment data...")
 
         enriched_path = (
             project_dir / "data" / "omdb_enriched.csv"
@@ -49,16 +58,19 @@ def run_pipeline():
 
         if not enriched_path.exists():
             raise FileNotFoundError(
-                "OMDb enriched file not found!"
+                f"OMDb enriched file not found: {enriched_path}"
             )
 
         enriched_movies = pd.read_csv(enriched_path)
 
-        print("OMDb records loaded:", len(enriched_movies))
+        logger.info(
+            "OMDb records loaded: %s",
+            len(enriched_movies)
+        )
 
 
         # STEP 4: LOAD
-        print("\nSTEP 4: Loading data into MySQL...")
+        logger.info("STEP 4: Loading data into MySQL...")
 
         load_data(
             movies,
@@ -68,14 +80,13 @@ def run_pipeline():
 
 
         # COMPLETED
-        print("\n===================================")
-        print("  MOVIE DATA PIPELINE COMPLETED!")
-        print("===================================")
+        logger.info("===================================")
+        logger.info("  MOVIE DATA PIPELINE COMPLETED!")
+        logger.info("===================================")
 
-    except Exception as error:
-
-        print("\nPipeline failed!")
-        print("Error:", error)
+    except Exception:
+        logger.exception("Movie data pipeline failed!")
+        raise
 
 
 if __name__ == "__main__":

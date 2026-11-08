@@ -31,7 +31,7 @@ def create_connection():
 
     except mysql.connector.Error as error:
         print("Database connection failed:", error)
-        return None
+        raise
 
 
 # Convert missing values into None for MySQL
@@ -40,10 +40,55 @@ def clean_value(value):
     if pd.isna(value):
         return None
 
+    if isinstance(value, str):
+
+        value = value.strip()
+
+        if value.upper() in ("N/A", "NA", ""):
+            return None
+
+        return value
+
     if hasattr(value, "item"):
         return value.item()
 
     return value
+
+
+# Convert runtime text into minutes
+def clean_runtime(value):
+
+    value = clean_value(value)
+
+    if value is None:
+        return None
+
+    runtime = str(value).lower().replace("min", "").strip()
+
+    runtime = pd.to_numeric(runtime, errors="coerce")
+
+    if pd.isna(runtime):
+        return None
+
+    return int(runtime)
+
+
+# Convert box office text into a numeric amount
+def clean_box_office(value):
+
+    value = clean_value(value)
+
+    if value is None:
+        return None
+
+    amount = str(value).replace("$", "").replace(",", "").strip()
+
+    amount = pd.to_numeric(amount, errors="coerce")
+
+    if pd.isna(amount):
+        return None
+
+    return int(amount)
 
 
 # Load all four MySQL tables
@@ -55,7 +100,7 @@ def load_data(movies, ratings, enriched_movies):
         errors="ignore"
     )
 
-    # Merge transformed MovieLens data with OMDb data
+    # Merge MovieLens data with OMDb data
     movies = movies.merge(
         enriched_movies,
         on="movieId",
@@ -76,10 +121,6 @@ def load_data(movies, ratings, enriched_movies):
     )
 
     connection = create_connection()
-
-    if connection is None:
-        return
-
     cursor = connection.cursor()
 
     try:
@@ -89,7 +130,7 @@ def load_data(movies, ratings, enriched_movies):
         # -----------------------------------
 
         movie_query = """
-            INSERT IGNORE INTO movies (
+            INSERT INTO movies (
                 movie_id, title, release_year, omdb_found,
                 director, actors, plot, released, runtime,
                 omdb_genre, language, country, box_office,
@@ -99,6 +140,21 @@ def load_data(movies, ratings, enriched_movies):
                 %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s
             )
+            ON DUPLICATE KEY UPDATE
+                title = VALUES(title),
+                release_year = VALUES(release_year),
+                omdb_found = VALUES(omdb_found),
+                director = VALUES(director),
+                actors = VALUES(actors),
+                plot = VALUES(plot),
+                released = VALUES(released),
+                runtime = VALUES(runtime),
+                omdb_genre = VALUES(omdb_genre),
+                language = VALUES(language),
+                country = VALUES(country),
+                box_office = VALUES(box_office),
+                imdb_rating = VALUES(imdb_rating),
+                awards = VALUES(awards)
         """
 
         movie_records = []
@@ -114,18 +170,18 @@ def load_data(movies, ratings, enriched_movies):
 
             record = (
                 int(row["movieId"]),
-                row["title"],
+                clean_value(row["title"]),
                 clean_value(row["release_year"]),
                 found,
                 clean_value(row["Director"]),
                 clean_value(row["Actors"]),
                 clean_value(row["Plot"]),
                 clean_value(row["Released"]),
-                clean_value(row["Runtime"]),
+                clean_runtime(row["Runtime"]),
                 clean_value(row["Genre"]),
                 clean_value(row["Language"]),
                 clean_value(row["Country"]),
-                clean_value(row["BoxOffice"]),
+                clean_box_office(row["BoxOffice"]),
                 clean_value(row["imdbRating"]),
                 clean_value(row["Awards"])
             )
@@ -135,7 +191,7 @@ def load_data(movies, ratings, enriched_movies):
         cursor.executemany(movie_query, movie_records)
 
         print("Movies processed:", len(movie_records))
-        print("Movies inserted:", cursor.rowcount)
+        print("Movie rows inserted/updated:", cursor.rowcount)
 
 
         # -----------------------------------
@@ -143,10 +199,13 @@ def load_data(movies, ratings, enriched_movies):
         # -----------------------------------
 
         ratings_query = """
-            INSERT IGNORE INTO ratings (
+            INSERT INTO ratings (
                 user_id, movie_id, rating, timestamp
             )
             VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                rating = VALUES(rating),
+                timestamp = VALUES(timestamp)
         """
 
         rating_records = []
@@ -156,7 +215,9 @@ def load_data(movies, ratings, enriched_movies):
             timestamp = row.timestamp
 
             if pd.notna(timestamp):
-                timestamp = pd.Timestamp(timestamp).to_pydatetime()
+                timestamp = pd.Timestamp(
+                    timestamp
+                ).to_pydatetime()
             else:
                 timestamp = None
 
@@ -172,7 +233,7 @@ def load_data(movies, ratings, enriched_movies):
         cursor.executemany(ratings_query, rating_records)
 
         print("Ratings processed:", len(rating_records))
-        print("Ratings inserted:", cursor.rowcount)
+        print("Rating rows inserted/updated:", cursor.rowcount)
 
 
         # -----------------------------------
@@ -191,8 +252,10 @@ def load_data(movies, ratings, enriched_movies):
                         unique_genres.add(genre.strip())
 
         genre_query = """
-            INSERT IGNORE INTO genres (genre_name)
+            INSERT INTO genres (genre_name)
             VALUES (%s)
+            ON DUPLICATE KEY UPDATE
+                genre_name = VALUES(genre_name)
         """
 
         genre_records = [
@@ -202,7 +265,7 @@ def load_data(movies, ratings, enriched_movies):
         cursor.executemany(genre_query, genre_records)
 
         print("Genres processed:", len(genre_records))
-        print("Genres inserted:", cursor.rowcount)
+        print("Genre rows inserted/updated:", cursor.rowcount)
 
 
         # -----------------------------------
@@ -237,10 +300,12 @@ def load_data(movies, ratings, enriched_movies):
                         )
 
         movie_genre_query = """
-            INSERT IGNORE INTO movie_genres (
+            INSERT INTO movie_genres (
                 movie_id, genre_id
             )
             VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE
+                genre_id = VALUES(genre_id)
         """
 
         cursor.executemany(
@@ -248,11 +313,15 @@ def load_data(movies, ratings, enriched_movies):
             movie_genre_records
         )
 
-        print("Movie-genre relationships processed:",
-              len(movie_genre_records))
+        print(
+            "Movie-genre relationships processed:",
+            len(movie_genre_records)
+        )
 
-        print("Movie-genre relationships inserted:",
-              cursor.rowcount)
+        print(
+            "Movie-genre relationships inserted/updated:",
+            cursor.rowcount
+        )
 
 
         # Save all changes

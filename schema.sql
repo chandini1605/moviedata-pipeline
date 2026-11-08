@@ -1,3 +1,4 @@
+
 -- Create database
 CREATE DATABASE IF NOT EXISTS movie_analytics;
 
@@ -16,13 +17,17 @@ CREATE TABLE IF NOT EXISTS movies (
     actors TEXT,
     plot TEXT,
     released DATE,
-    runtime VARCHAR(50),
+    runtime SMALLINT,
     omdb_genre VARCHAR(255),
     language VARCHAR(255),
     country VARCHAR(255),
-    box_office VARCHAR(50),
+    box_office BIGINT,
     imdb_rating DECIMAL(3,1),
-    awards TEXT
+    awards TEXT,
+
+    INDEX idx_movie_year (release_year),
+    INDEX idx_movie_director (director),
+    INDEX idx_movie_rating (imdb_rating)
 );
 
 
@@ -36,7 +41,10 @@ CREATE TABLE IF NOT EXISTS ratings (
     PRIMARY KEY (user_id, movie_id),
 
     FOREIGN KEY (movie_id)
-        REFERENCES movies(movie_id)
+        REFERENCES movies(movie_id),
+
+    INDEX idx_ratings_movie (movie_id),
+    INDEX idx_ratings_rating (rating)
 );
 
 
@@ -58,5 +66,7 @@ CREATE TABLE IF NOT EXISTS movie_genres (
         REFERENCES movies(movie_id),
 
     FOREIGN KEY (genre_id)
-        REFERENCES genres(genre_id)
+        REFERENCES genres(genre_id),
+
+    INDEX idx_movie_genres_genre (genre_id)
 );
