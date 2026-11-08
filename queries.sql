@@ -5,14 +5,23 @@ USE movie_analytics;
 -- Q1. Find the movie with the highest average rating
 
 SELECT
+    m.movie_id,
     m.title,
-    ROUND(AVG(r.rating), 2) AS average_rating
+    ROUND(AVG(r.rating), 2) AS average_rating,
+    COUNT(DISTINCT r.user_id) AS total_users
 FROM movies m
 INNER JOIN ratings r
     ON m.movie_id = r.movie_id
-GROUP BY m.movie_id, m.title
-ORDER BY average_rating DESC
+GROUP BY
+    m.movie_id,
+    m.title
+HAVING COUNT(DISTINCT r.user_id) >= 10
+ORDER BY
+    average_rating DESC,
+    total_users DESC,
+    m.title ASC
 LIMIT 1;
+
 
 
 -- Q2. Find the top 5 genres by average rating
@@ -32,15 +41,40 @@ LIMIT 5;
 
 -- Q3. Find the director with the most movies
 
+
+    -- Extract the remaining directors
+    SELECT
+        movie_id,
+        TRIM(SUBSTRING_INDEX(remaining_directors, ',', 1)),
+        CASE
+            WHEN INSTR(remaining_directors, ',') > 0
+            THEN TRIM(
+                SUBSTRING(
+                    remaining_directors,
+                    INSTR(remaining_directors, ',') + 1
+                )
+            )
+            ELSE NULL
+        END
+    FROM director_split
+    WHERE remaining_directors IS NOT NULL
+      AND remaining_directors <> ''
+
+)
+
 SELECT
-    director,
-    COUNT(*) AS total_movies
-FROM movies
-WHERE director IS NOT NULL
-  AND director <> 'N/A'
-GROUP BY director
-ORDER BY total_movies DESC
+    director_name,
+    COUNT(DISTINCT movie_id) AS total_movies
+FROM director_split
+WHERE director_name <> ''
+  AND UPPER(director_name) <> 'N/A'
+GROUP BY director_name
+ORDER BY
+    total_movies DESC,
+    director_name ASC
 LIMIT 1;
+
+
 
 
 -- Q4. Find the average rating by release year
