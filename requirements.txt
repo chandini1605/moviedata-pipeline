@@ -1,9 +1,5 @@
 pandas
 numpy
-requests
 python-dotenv
 mysql-connector-python
-matplotlib
-seaborn
 jupyter
-scikit-learn
