@@ -31,7 +31,7 @@ moviedata-pipeline/
 ├── schema.sql              table definitions
 ├── queries.sql             the four analysis queries
 ├── requirements.txt
-├── .env           copy this to .env and fill in your values
+├── .env.example         copy this to .env and fill in your values
 └── README.md
 ```
 
@@ -47,7 +47,7 @@ python -m venv venv
 source venv/bin/activate        # on Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env            # then open .env and fill in your details
+cp .env.example           # then open .env and fill in your details
 ```
 
 Your `.env` should look like this:
@@ -59,7 +59,7 @@ MYSQL_USER=root
 MYSQL_PASSWORD=your_mysql_password
 ```
 
-The `.env` file is in `.gitignore`, so it never gets committed.
+The `.env.example` file is in `.gitignore`, so it never gets committed.
 
 Then run these in order:
 
