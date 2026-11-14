@@ -31,7 +31,7 @@ moviedata-pipeline/
 ├── schema.sql              table definitions
 ├── queries.sql             the four analysis queries
 ├── requirements.txt
-├── .env.example.env       copy this to .env and fill in your values
+├── .env.example      copy this to .env and fill in your values
 └── README.md
 ```
 
@@ -47,7 +47,7 @@ python -m venv venv
 source venv/bin/activate        # on Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env.example           # then open .env and fill in your details
+cp .env.example.env          # then open .env and fill in your details
 ```
 
 Your `.env` should look like this:
