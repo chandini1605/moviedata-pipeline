@@ -31,7 +31,7 @@ moviedata-pipeline/
 ├── schema.sql              table definitions
 ├── queries.sql             the four analysis queries
 ├── requirements.txt
-├── .env.example         copy this to .env and fill in your values
+├── .env.example.env       copy this to .env and fill in your values
 └── README.md
 ```
 
@@ -59,7 +59,7 @@ MYSQL_USER=root
 MYSQL_PASSWORD=your_mysql_password
 ```
 
-The `.env.example` file is in `.gitignore`, so it never gets committed.
+The `.env` file is in `.gitignore`, so it never gets committed.
 
 Then run these in order:
 
