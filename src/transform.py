@@ -26,13 +26,12 @@ def transform_data(movies, ratings):
 
     print("Release year extracted successfully!")
 
-        # Feature engineering: decade (e.g. 1995 -> 1990)
+    # Feature engineering: decade (e.g. 1995 -> 1990)
     movies["decade"] = (movies["release_year"] // 10) * 10
 
     print("Decade column created successfully!")
 
-
-        # Split movie genres into individual genres
+    # Split movie genres into individual genres
     movies["genres"] = movies["genres"].str.split("|")
 
     print("Genres separated successfully!")
