@@ -16,7 +16,6 @@ The dataset has 9,742 movies and 100,836 ratings.
 
 ## Folder layout
 
-```text
 moviedata-pipeline/
 ├── data/                   movies.csv, ratings.csv, omdb_enriched.csv
 ├── eda/                    notebook where I explored the data first
@@ -26,15 +25,15 @@ moviedata-pipeline/
 │   ├── enrich.py           OMDb lookup, title cleaning, API error handling
 │   ├── batch_enrich.py     runs the lookups in batches and saves as it goes
 │   └── load.py             cleans OMDb values and writes everything to MySQL
-├── tests/
+├── tests/                  automated pytest tests (transform, load, extract)
+├── scripts/                manual checks: check_enrich.py (OMDb API), check_mysql.py (database)
 ├── etl.py                  main script
 ├── schema.sql              table definitions
 ├── queries.sql             the four analysis queries
+├── pytest.ini              pytest settings
 ├── requirements.txt
-├── .env.example      copy this to .env and fill in your values
+├── .env.example            copy this to .env and fill in your values
 └── README.md
-```
-
 ## How to run it
 
 You need Python 3.10 or newer, MySQL 8, and a free OMDb API key (https://www.omdbapi.com/apikey.aspx).
@@ -76,10 +75,11 @@ You can run `etl.py` as many times as you like. It updates existing rows instead
 
 A note on the OMDb step: the free API key only allows about 1,000 requests a day, and there are nearly 10,000 movies. So `batch_enrich.py` stops after 980 requests and picks up where it left off the next time. Run it once a day until the enrichment file covers all the movies.
 
-
 ## Running the tests
 
+```bash
 pytest -v
+```
 
 ## Database design
 
