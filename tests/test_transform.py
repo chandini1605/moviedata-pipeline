@@ -47,3 +47,9 @@ def test_row_counts_do_not_change():
     new_movies, new_ratings = transform_data(movies, ratings)
     assert len(new_movies) == 3
     assert len(new_ratings) == 2
+
+def test_decade_is_calculated():
+    movies, ratings = make_sample()
+    movies, _ = transform_data(movies, ratings)
+    assert movies.loc[0, "decade"] == 1990
+    assert pd.isna(movies.loc[2, "decade"])

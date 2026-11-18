@@ -10,9 +10,8 @@ CREATE TABLE IF NOT EXISTS movies (
     movie_id INT PRIMARY KEY,
     title VARCHAR(500) NOT NULL,
     release_year SMALLINT,
-
+    decade SMALLINT,
     omdb_found BOOLEAN,
-
     director VARCHAR(500),
     actors TEXT,
     plot TEXT,

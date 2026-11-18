@@ -131,18 +131,19 @@ def load_data(movies, ratings, enriched_movies):
 
         movie_query = """
             INSERT INTO movies (
-                movie_id, title, release_year, omdb_found,
+                movie_id, title, release_year, decade, omdb_found,
                 director, actors, plot, released, runtime,
                 omdb_genre, language, country, box_office,
                 imdb_rating, awards
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s
             )
             ON DUPLICATE KEY UPDATE
                 title = VALUES(title),
                 release_year = VALUES(release_year),
+                decade = VALUES(decade),
                 omdb_found = VALUES(omdb_found),
                 director = VALUES(director),
                 actors = VALUES(actors),
@@ -172,6 +173,7 @@ def load_data(movies, ratings, enriched_movies):
                 int(row["movieId"]),
                 clean_value(row["title"]),
                 clean_value(row["release_year"]),
+                clean_value(row["decade"]),
                 found,
                 clean_value(row["Director"]),
                 clean_value(row["Actors"]),

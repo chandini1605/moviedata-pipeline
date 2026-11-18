@@ -6,7 +6,7 @@ This pipeline reads the MovieLens small dataset (movies and ratings), pulls extr
 
 1. Reads `movies.csv` and `ratings.csv` from the `data/` folder.
 2. Looks up each movie on OMDb (director, actors, plot, runtime, box office, IMDb rating, awards) and saves the results to `data/omdb_enriched.csv`.
-3. Cleans the data: converts timestamps, pulls the release year out of the title, splits the genres, turns runtime and box office into numbers.
+3. Cleans the data: converts timestamps, pulls the release year out of the title, splits the genres, turns runtime,adds a decade column (e.g. 1990, 2000) and box office into numbers.
 4. Loads four tables into MySQL.
 5. `queries.sql` answers the analysis questions.
 
@@ -156,6 +156,7 @@ Q3 only covers movies that OMDb has matched, so the answer depends on how much o
 - Remember which movies OMDb really doesn't have, so they aren't requested again.
 - Add a decade column and rating counts per movie.
 - For a real production setup: schedule the job with something like Airflow, call the API with retries and rate limiting, bulk load the ratings, add data-quality checks, and use Docker so setup is the same everywhere.
+- Add rating counts per movie.
 
 ## Author
 
