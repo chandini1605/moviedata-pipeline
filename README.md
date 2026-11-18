@@ -48,11 +48,11 @@ source venv/bin/activate        # on Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 cp .env.example .env        # then open .env and fill in your details
+```
 
 ## Running the tests
 
 pytest -v
-```
 
 Your `.env` should look like this:
 
@@ -150,7 +150,6 @@ Q3 only covers movies that OMDb has matched, so the answer depends on how much o
 - Add `directors` and `movie_directors` tables, the same way I did for genres.
 - Remember which movies OMDb really doesn't have, so they aren't requested again.
 - Add a decade column and rating counts per movie.
-- Turn the check scripts into real `pytest` tests.
 - For a real production setup: schedule the job with something like Airflow, call the API with retries and rate limiting, bulk load the ratings, add data-quality checks, and use Docker so setup is the same everywhere.
 
 ## Author

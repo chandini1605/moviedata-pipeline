@@ -1,14 +1,13 @@
 from src.extract import extract_data
 
-# Extract both datasets
-movies, ratings = extract_data()
 
-# Display dataset information
-print("Movies shape:", movies.shape)
-print("Ratings shape:", ratings.shape)
+def test_extract_returns_data():
+    movies, ratings = extract_data()
+    assert len(movies) > 0
+    assert len(ratings) > 0
 
-print("\nMovies preview:")
-print(movies.head())
 
-print("\nRatings preview:")
-print(ratings.head())
+def test_expected_columns_exist():
+    movies, ratings = extract_data()
+    assert {"movieId", "title", "genres"} <= set(movies.columns)
+    assert {"userId", "movieId", "rating", "timestamp"} <= set(ratings.columns)
