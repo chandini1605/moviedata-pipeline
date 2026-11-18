@@ -48,6 +48,10 @@ source venv/bin/activate        # on Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 cp .env.example .env        # then open .env and fill in your details
+
+## Running the tests
+
+pytest -v
 ```
 
 Your `.env` should look like this:
@@ -138,7 +142,7 @@ Q3 only covers movies that OMDb has matched, so the answer depends on how much o
 - Not every movie has been enriched yet. At the last run the enrichment file covered about 15% of the movies, so director results are based on that part of the data. Each daily run adds up to 980 more.
 - Directors and actors are still stored as plain text on `movies`. A separate `directors` table (like `genres`) would be cleaner.
 - Movies that OMDb really doesn't have are tried again on every batch run, which uses up some of the daily quota.
-- The tests in `tests/` are simple check scripts, not automated tests with assertions.
+- Live checks for the OMDb API and MySQL are in scripts/ and run manually. The automated tests in tests/ cover the transform and cleaning logic.
 
 ## What I'd do next
 

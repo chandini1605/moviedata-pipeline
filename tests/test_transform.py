@@ -1,32 +1,49 @@
-from src.extract import extract_data
+import pandas as pd
 from src.transform import transform_data
 
-# Extract the original datasets
-movies, ratings = extract_data()
 
-# Transform the datasets
-movies, ratings = transform_data(movies, ratings)
-
-# Check the results
-print("\nMovies after transformation:")
-print(movies[["title", "release_year", "genres"]].head())
-
-print("\nRatings after transformation:")
-print(ratings[["userId", "movieId", "rating", "timestamp"]].head())
-
-print("\nRelease year data type:")
-print(movies["release_year"].dtype)
-
-print("\nTimestamp data type:")
-print(ratings["timestamp"].dtype)
+def make_sample():
+    movies = pd.DataFrame({
+        "movieId": [1, 2, 3],
+        "title": ["Toy Story (1995)", "Heat (1995)", "No Year Movie"],
+        "genres": ["Adventure|Animation|Comedy", "Action|Crime", "(no genres listed)"],
+    })
+    ratings = pd.DataFrame({
+        "userId": [1, 1],
+        "movieId": [1, 2],
+        "rating": [4.0, 5.0],
+        "timestamp": [964982703, 964981247],
+    })
+    return movies, ratings
 
 
-print("Movies with missing release year:",
-      movies["release_year"].isna().sum())
+def test_release_year_is_extracted():
+    movies, ratings = make_sample()
+    movies, _ = transform_data(movies, ratings)
+    assert movies.loc[0, "release_year"] == 1995
+    assert movies.loc[1, "release_year"] == 1995
 
 
-# Check movies without a release year
-missing_year_movies = movies[movies["release_year"].isna()]
+def test_missing_year_becomes_null():
+    movies, ratings = make_sample()
+    movies, _ = transform_data(movies, ratings)
+    assert pd.isna(movies.loc[2, "release_year"])
 
-print("\nMovies without release year:")
-print(missing_year_movies[["movieId", "title"]].to_string(index=False))
+
+def test_genres_are_split_into_list():
+    movies, ratings = make_sample()
+    movies, _ = transform_data(movies, ratings)
+    assert movies.loc[0, "genres"] == ["Adventure", "Animation", "Comedy"]
+
+
+def test_timestamp_is_converted_to_datetime():
+    movies, ratings = make_sample()
+    _, ratings = transform_data(movies, ratings)
+    assert pd.api.types.is_datetime64_any_dtype(ratings["timestamp"])
+
+
+def test_row_counts_do_not_change():
+    movies, ratings = make_sample()
+    new_movies, new_ratings = transform_data(movies, ratings)
+    assert len(new_movies) == 3
+    assert len(new_ratings) == 2
