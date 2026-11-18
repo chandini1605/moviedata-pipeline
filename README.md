@@ -15,6 +15,7 @@ The dataset has 9,742 movies and 100,836 ratings.
 ![ETL architecture](https://github.com/user-attachments/assets/72339ad5-4f92-4caa-9a78-03891efa5af9)
 
 ## Folder layout
+
 ```text
 moviedata-pipeline/
 ├── data/                   movies.csv, ratings.csv, omdb_enriched.csv
@@ -34,7 +35,9 @@ moviedata-pipeline/
 ├── requirements.txt
 ├── .env.example            copy this to .env and fill in your values
 └── README.md
+
 ```
+
 ## How to run it
 
 You need Python 3.10 or newer, MySQL 8, and a free OMDb API key (https://www.omdbapi.com/apikey.aspx).
