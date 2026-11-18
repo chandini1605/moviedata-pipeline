@@ -50,10 +50,6 @@ pip install -r requirements.txt
 cp .env.example .env        # then open .env and fill in your details
 ```
 
-## Running the tests
-
-pytest -v
-
 Your `.env` should look like this:
 
 ```env
@@ -79,6 +75,11 @@ If you already created the tables with an older version of `schema.sql`, drop th
 You can run `etl.py` as many times as you like. It updates existing rows instead of creating duplicates.
 
 A note on the OMDb step: the free API key only allows about 1,000 requests a day, and there are nearly 10,000 movies. So `batch_enrich.py` stops after 980 requests and picks up where it left off the next time. Run it once a day until the enrichment file covers all the movies.
+
+
+## Running the tests
+
+pytest -v
 
 ## Database design
 
